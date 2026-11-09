@@ -57,6 +57,7 @@ const labels = {
   monitor: "Konuşma denetimi",
   history: "Etkinlik geçmişi",
   resources: "Oyunlar ve siteler",
+  apps: "Uygulamalarım",
   annual: "Yıllık planlar",
   modules: "Ders modülleri",
   activity: "Günlük aktiviteler",
@@ -111,6 +112,7 @@ function shell() {
         "messages",
         "monitor",
         "history",
+        "apps",
         "resources",
         "plan",
         "annual",
@@ -119,7 +121,7 @@ function shell() {
         "notes",
         "profile",
       ]
-    : ["home", "assignments", "messages", "resources", "profile"];
+    : ["home", "assignments", "messages", "apps", "resources", "profile"];
   const icons = ["▦", "♧", "▤", "✉", "◉", "◷", "✧"];
   $("#navigation").innerHTML =
     nav
@@ -361,6 +363,35 @@ function entriesPage(page) {
     }</div>`
   );
 }
+const DRIVE_FOLDER =
+  "https://drive.google.com/drive/folders/1YWNJgTheUk5FufTW4qqALOpev5vVUBrz?usp=sharing";
+function isDriveResource(resource) {
+  try {
+    return ["drive.google.com", "docs.google.com"].includes(
+      new URL(resource.url).hostname,
+    );
+  } catch {
+    return false;
+  }
+}
+function appCard(resource) {
+  const drive = isDriveResource(resource);
+  return `<article class="student-card"><p class="eyebrow">${drive ? "GOOGLE DRIVE" : "ÇEVRİMİÇİ UYGULAMA"}</p><h3>${e(resource.title)}</h3><p class="subtitle resource-url">${e(resource.url)}</p><div class="student-card-bottom">${drive ? `<a class="text-button" href="${e(resource.url)}" target="_blank" rel="noopener noreferrer" data-action="drive-link" data-title="${e(resource.title)}">Drive bağlantısını aç ↗</a>` : `<button class="text-button" data-action="open-resource" data-id="${e(resource.id)}">Uygulamayı aç ↗</button>`}</div></article>`;
+}
+function appsPage() {
+  const drive = data.resources.filter(isDriveResource);
+  if (!drive.some((r) => r.url === DRIVE_FOLDER))
+    drive.unshift({ title: "Drive oyun klasörüm", url: DRIVE_FOLDER });
+  const online = data.resources.filter((r) => !isDriveResource(r));
+  return (
+    heading(
+      "Uygulamalarım",
+      "Paylaşılan uygulamalarınıza ve oyunlarınıza tek yerden ulaşın.",
+      teacher() ? button("add-resource", "＋ Uygulama ekle") : "",
+    ) +
+    `<section><div class="section-title"><h2>Çevrimiçi uygulamalar</h2><span class="badge">Doğrudan açılır</span></div><div class="student-grid"><a class="student-card" href="#game"><p class="eyebrow">UYGULAMA İÇİ OYUN</p><h3>✧ Matematik Atölyesi</h3><p class="subtitle">10 soruluk dört işlem oyunu.</p><div class="student-card-bottom"><span>Çevrimiçi oyna</span><span>Oyunu aç →</span></div></a>${online.map(appCard).join("")}</div></section><section class="apps-drive"><div class="section-title"><h2>Drive uygulamalarım</h2><span class="badge warm">Google Drive bağlantıları</span></div><div class="student-grid">${drive.map(appCard).join("")}</div><p class="notice">Drive bağlantıları Google Drive'da açılır. Klasördeki oyunlara oradan ulaşabilirsiniz; klasörün paylaşım izni Google Drive üzerinden yönetilir.</p></section>`
+  );
+}
 function resourcePage() {
   return (
     heading(
@@ -497,6 +528,7 @@ function render() {
   else if (page === "assignments") html = assignments(id);
   else if (kinds[page]) html = entriesPage(page);
   else if (page === "resources") html = resourcePage();
+  else if (page === "apps") html = appsPage();
   else if (page === "profile") html = profile();
   else if (page === "messages" || page === "monitor")
     html = messages(page === "monitor", id);
@@ -838,6 +870,7 @@ async function action(key, el) {
     await refreshPage();
     toast("Kayıt silindi.");
   }
+  if (key === "drive-link") await log("resource", el.dataset.title, el.href);
   if (key === "open-resource") {
     const r = data.resources.find((r) => r.id === el.dataset.id);
     if (!r) return;

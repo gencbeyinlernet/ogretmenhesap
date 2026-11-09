@@ -204,6 +204,12 @@ async function mock(route) {
     permissions: ["clipboard-read", "clipboard-write"],
   });
   await context.route("https://rfmelsdtasxoddtolqpb.supabase.co/**", mock);
+  await context.route("https://example.org/**", (route) =>
+    route.fulfill({ body: "Test application" }),
+  );
+  await context.route("https://drive.google.com/**", (route) =>
+    route.fulfill({ body: "Test Drive folder" }),
+  );
   const page = await context.newPage(),
     errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -244,6 +250,25 @@ async function mock(route) {
     ).length,
     1,
   );
+  await page.locator('nav a[href="#apps"]').click();
+  const sharedDrive = page.getByRole("link", {
+    name: "Drive bağlantısını aç ↗",
+  });
+  assert.equal(
+    await sharedDrive.getAttribute("href"),
+    "https://drive.google.com/drive/folders/1YWNJgTheUk5FufTW4qqALOpev5vVUBrz?usp=sharing",
+  );
+  assert.equal(await sharedDrive.getAttribute("target"), "_blank");
+  await page.getByRole("button", { name: "Uygulama ekle" }).click();
+  await page.getByLabel("Kaynak adı").fill("Online uygulamam");
+  await page.getByLabel("HTTPS bağlantısı").fill("https://example.org/app");
+  await page.getByRole("button", { name: "Kaydet", exact: true }).click();
+  await page.getByRole("heading", { name: "Online uygulamam" }).waitFor();
+  const onlinePopup = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Uygulamayı aç ↗" }).click();
+  const onlinePage = await onlinePopup;
+  await onlinePage.waitForURL("https://example.org/app");
+  await onlinePage.close();
   await page.locator('nav a[href="#annual"]').click();
   await page.getByRole("button", { name: "Yeni kayıt" }).click();
   await page.getByLabel("Başlık", { exact: true }).fill("2026 yıllık plan");
@@ -300,6 +325,18 @@ async function mock(route) {
   await page.getByRole("button", { name: "Gönder →", exact: true }).click();
   await page.locator(".message p").filter({ hasText: "<img" }).waitFor();
   assert.equal(await page.locator(".chat-log img").count(), 0);
+  await page.locator('nav a[href="#apps"]').click();
+  const drivePopup = page.waitForEvent("popup");
+  await page.getByRole("link", { name: "Drive bağlantısını aç ↗" }).click();
+  const drivePage = await drivePopup;
+  await drivePage.waitForURL(/drive.google.com/);
+  await drivePage.close();
+  assert.equal(
+    store.od_activity_log.some(
+      (r) => r.event_type === "resource" && r.label === "Drive oyun klasörüm",
+    ),
+    true,
+  );
   await page.locator('nav a[href="#resources"]').click();
   await page.getByRole("link", { name: /Matematik Atölyesi/ }).click();
   for (let i = 0; i < 10; i++) {
@@ -348,7 +385,7 @@ async function mock(route) {
   assert.deepEqual(errors, []);
   await browser.close();
   console.log(
-    "PASS: SQL copy/clear, teacher login, selected assignments, annual plans, student search/points, messaging/monitoring, username-only registration, student submissions/game/activity, XSS escaping, responsive widths, teacher returns assignment. Live Supabase is not exercised by this mock test.",
+    "PASS: SQL copy/clear, teacher login, selected assignments, annual plans, student search/points, messaging/monitoring, username-only registration, student submissions/game/activity, XSS escaping, responsive widths, teacher returns assignment. Apps menu, direct online popup, shared Drive link and student opening log also verified. Live Supabase is not exercised by this mock test.",
   );
 })().catch((err) => {
   console.error(err);
