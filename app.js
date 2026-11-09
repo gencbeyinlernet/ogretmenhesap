@@ -436,6 +436,13 @@ const SHARED_GAMES = [
     kind: "game",
     builtin: true,
   },
+  {
+    id: "shared-harf-mario",
+    title: "Harf Mario Macerası",
+    url: "https://canvawebsitesi.my.canva.site/harf-mario-maceras",
+    kind: "game",
+    builtin: true,
+  },
 ];
 function resources() {
   const saved = data.resources || [];
