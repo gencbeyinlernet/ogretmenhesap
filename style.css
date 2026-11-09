@@ -1527,3 +1527,15 @@ button:disabled {
 .apps-drive {
   margin-top: 32px;
 }
+.heading-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 760px) {
+  .heading-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

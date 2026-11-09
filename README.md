@@ -17,6 +17,7 @@ SQL yeniden çalıştırılabilir; kayıtları ve mevcut öğretmenin parolasın
 ## Özellikler ve gizlilik
 
 - Öğretmen: tüm kayıtlı öğrenciler, öğrenci profilleri, tüm uygulama etkinlikleri ve iki kişi arasındaki konuşmalar.
+- Öğretmen menüsündeki **Not ve devamsızlık** bağlantısı ve Öğrencilerim ekranındaki kısayol, paylaşılan Google Sheets dosyasını yeni sekmede açar. Bu bir dış bağlantıdır; tablodaki veriler Supabase ile eşitlenmez. Dosyaya erişim Google paylaşım izinleriyle belirlenir; bu bağlantı öğrenci menüsünde gösterilmez.
 - Öğrenci: kendi profilini güncelleme; atanmış ödevlerini görme, teslim etme, iade edilmiş ödevi yeniden gönderme; kendi puan ve geri bildirimleri.
 - Mesajlar: gönderici, alıcı ve tek öğretmen okuyabilir. Öğrenciler diğer konuşmaları okuyamaz. İletişim dizini yalnızca kullanıcı adı, görünen ad ve rol paylaşır.
 - Ödevler: seçilen öğrencilere toplu ve atomik dağıtım; metin/çalışma bağlantısı teslimi; 0–100 puan veya geri gönderme. Ek katılım puanları ayrı kayıtlardır. Toplam puan, güncel ödev puanları ve ek puanların toplamıdır. Dosya yükleme bu sürüme dahil değildir.

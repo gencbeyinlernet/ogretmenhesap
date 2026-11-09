@@ -103,6 +103,8 @@ function showModal(title, fields, save) {
   modalSave = save;
   $("#modal").showModal();
 }
+const STUDENT_SHEET =
+  "https://docs.google.com/spreadsheets/d/1iNJyPG8cGun2uK25wQSEMDUNsrCIszd_yvbd3Pz2D7A/edit?usp=sharing";
 function shell() {
   const nav = teacher()
     ? [
@@ -127,7 +129,10 @@ function shell() {
     nav
       .map(
         (key, i) =>
-          `<a href="#${key}" data-nav="${key}"><span>${icons[i % icons.length]}</span>${labels[key]}</a>`,
+          `<a href="#${key}" data-nav="${key}"><span>${icons[i % icons.length]}</span>${labels[key]}</a>` +
+          (key === "students" && teacher()
+            ? `<a href="${e(STUDENT_SHEET)}" target="_blank" rel="noopener noreferrer" class="attendance-link"><span>▥</span>Not ve devamsızlık ↗</a>`
+            : ""),
       )
       .join("") +
     (me
@@ -252,7 +257,7 @@ function studentList() {
     heading(
       "Her öğrenci, yeni bir hikâye.",
       "Kayıt olan tüm öğrencileri ve öğrenme süreçlerini takip edin.",
-      button("reload", "↻ Yenile", "", true),
+      `<div class="heading-actions"><a class="button" href="${e(STUDENT_SHEET)}" target="_blank" rel="noopener noreferrer">Not ve devamsızlık ↗</a>${button("reload", "↻ Yenile", "", true)}</div>`,
     ) +
     `<input class="search" id="student-search" placeholder="İsim, kullanıcı adı veya sınıf ara…" aria-label="Öğrenci ara"><div class="student-grid" id="student-results">${students().map(studentCard).join("") || empty("Henüz kayıtlı öğrenci yok.")}</div>`
   );
