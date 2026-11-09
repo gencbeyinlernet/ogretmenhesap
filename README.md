@@ -1,21 +1,48 @@
 # Öğretmen Defteri
 
-Türkçe, mobil uyumlu öğretmen çalışma alanı. Kişisel profil, öğrenci profilleri, ders programı, görev/ödev takibi, notlar ve JSON yedekleme içerir.
+Türkçe ve mobil uyumlu öğretmen/öğrenci çalışma alanı. Statik arayüz GitHub Pages üzerinde, kimlik doğrulama ve uygulama kayıtları Supabase üzerinde çalışır.
 
-## Yerel çalıştırma
+## İlk Supabase kurulumu
 
-Node veya paket kurulumu gerektirmez. Depo dizininde:
+1. Uygulamadaki sol **SQL kurulumu** düğmesini açın.
+2. Öğretmenin başlangıç parolasını girin. İlk girişten sonra Profilim ekranından başlangıç parolasını değiştirebilirsiniz. Parola kaynak dosyalarına kaydedilmez; yalnızca kopyalanan SQL'e eklenir. Kopyaladığınız SQL'i paylaşmayın.
+3. SQL'i projenin **SQL Editor** ekranında çalıştırın. Kaynak şablon `supabase/schema.sql` dosyasıdır; elle çalıştıracaksanız `__TEACHER_PASSWORD__` yerini kendi parolanızla değiştirin (tek tırnakları SQL kurallarına göre iki kez yazarak kaçırın).
+4. **Authentication → Sign In / Providers → Email**: Email sağlayıcısını ve yeni kullanıcı kaydını açık tutun, **Confirm email** seçeneğini kapatın. Kullanıcılar gerçek e-posta vermediği için e-posta doğrulama/sıfırlama desteklenmez. Supabase güçlü parola kuralı açılmışsa buna uygun parola seçilmelidir.
+5. `burakturgut` ve başlangıç parolanızla giriş yapın. Diğer kayıtlar yalnızca öğrenci rolüyle açılır. Kullanıcı adları 3–24 küçük Latin harfi, rakam veya alt çizgidir; büyük harfler girişte küçültülür.
+
+Supabase adresi ve **anon** anahtarı `backend.js` içindedir. Anon anahtarı tarayıcı kullanımı için herkese açık kimliktir; yetkilendirme RLS ile sağlanır. Service-role veya veritabanı parolası tarayıcıya eklenmez. Verilen anon anahtarı SQL çalıştırma veya Auth yönetimi yetkisi vermez: ilk kurulum SQL Editor'da proje sahibi tarafından yapılmalıdır.
+
+SQL yeniden çalıştırılabilir; kayıtları ve mevcut öğretmenin parolasını değiştirmez. Tek öğretmen kısıtı veritabanında uygulanır. Öğretmen hesabı yalnızca yönetici SQL'i ile oluşturulur. Supabase Auth parolaları hash olarak saklar. Başlangıç SQL'i tamamlanmadan kayıt/giriş çalışmaz.
+
+## Özellikler ve gizlilik
+
+- Öğretmen: tüm kayıtlı öğrenciler, öğrenci profilleri, tüm uygulama etkinlikleri ve iki kişi arasındaki konuşmalar.
+- Öğrenci: kendi profilini güncelleme; atanmış ödevlerini görme, teslim etme, iade edilmiş ödevi yeniden gönderme; kendi puan ve geri bildirimleri.
+- Mesajlar: gönderici, alıcı ve tek öğretmen okuyabilir. Öğrenciler diğer konuşmaları okuyamaz. İletişim dizini yalnızca kullanıcı adı, görünen ad ve rol paylaşır.
+- Ödevler: seçilen öğrencilere toplu ve atomik dağıtım; metin/çalışma bağlantısı teslimi; 0–100 puan veya geri gönderme. Ek katılım puanları ayrı kayıtlardır. Toplam puan, güncel ödev puanları ve ek puanların toplamıdır. Dosya yükleme bu sürüme dahil değildir.
+- Öğretmenin özel yıllık planları, ders modülleri, günlük aktiviteleri, ders programı ve notları.
+- Kaynak/oyun bağlantıları ve 10 soruluk dahili matematik oyunu. Öğrenci girişleri, sayfa geçişleri, bu uygulamadan kaynak açma ve oyun sonuçları kaydedilir. Etkinlik geçmişini sadece öğretmen okuyabilir. Bu, güvenilir bir sınav denetimi değildir; istemciden gönderilen oyun puanları eğitim amaçlıdır, öğrenci teknik yollarla etkinlik göndermeyi durdurabilir veya sahte oyun sonucu gönderebilir. Diğer web sitelerindeki tarayıcı geçmişini okumaz/izlemez.
+- Mesajlar açıkken 10 saniyede bir yenilenir; önceki mesajlar ve geçmiş sayfalı yüklenir. Diğer listeler sayfa açılışında alınır, Yenile ile güncellenir.
+- İlk sürümün yerel kayıtları eski `ogretmen-defteri-v1` anahtarında korunur; otomatik olarak hesaplarla ilişkilendirilmez. Yeni uygulama kayıtları Supabase veritabanındadır. Oturum belirteçleri bu tarayıcıda saklanır; paylaşılan cihazlarda çıkış yapın.
+
+## Yerel geliştirme
 
 ```sh
 python3 -m http.server 8000 --bind 0.0.0.0
 ```
 
-## Veriler ve kapsam
+Uygulamanın çalışması için npm paketi veya derleme gerekmez. Test bağımlılıkları için Node.js 22+ ve `npm ci` kullanın.
 
-Veriler `localStorage` ile yalnızca kullanılan tarayıcıda saklanır. Öğrenci ekranları öğretmenin takip ettiği profillerdir; ayrı öğrenci hesabı, kimlik doğrulama, bulut veritabanı veya cihazlar arası eşitleme yoktur. Paylaşılan cihazlarda gerçek öğrenci bilgileri kullanmayın. Kişisel bilgilerim ekranından düzenli yedek alın; yedek dosyaları kişisel veri içerir.
+```sh
+npm test
+# Sunucu açıkken, Chromium kurulu ortamda:
+CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
+```
 
-## GitHub Pages
+`npm test`, PGlite PostgreSQL üzerinde gerçek şemayı iki kez çalıştırır; anonim erişim, öğrenci rolünü yükseltme, konuşma gizliliği, ödev yetkileri, teslim/iade/puanlama, özel öğretmen kayıtları ve geçmiş politikalarını sınar. Supabase'in `auth.users`, `auth.identities` ve `auth.uid()` sözleşmeleri yerel testte taklit edilir; bu test gerçek GoTrue servisini doğrulamaz.
 
-Depo **Settings → Pages → Build and deployment → Source: GitHub Actions** seçeneğini kullanmalıdır. `main` dalına gönderim `.github/workflows/pages.yml` iş akışını çalıştırır. Yalnızca uygulamanın üç statik dosyası yayımlanır; kişisel kayıtlar depoya gönderilmez.
+Tarayıcı testi giriş/kayıt, SQL kopyalama, öğretmen/öğrenci ekranları, mesajlar, ödevler, yıllık plan, oyun ve mobil görünümü API taklidiyle sınar. Gerçek Supabase kurulumundan sonra en az iki ayrı öğrenci ve bir öğretmen oturumuyla uçtan uca kontrol yapılmalıdır.
 
-Google Fonts erişilemezse sistem yazı tipleri kullanılır. Backend veya gizli anahtar gerekmez.
+## Yayın
+
+**GitHub Settings → Pages → Source: GitHub Actions** seçilmelidir. `main` dalına gönderim `.github/workflows/pages.yml` iş akışını çalıştırır. Statik uygulama ve parolasız SQL şablonu yayımlanır. Supabase kullanıcı kayıtları veya öğretmen parolası Git deposuna yazılmaz. SQL düğmesi kurulumdan sonra ayrı bir değişiklikle kaldırılabilir.

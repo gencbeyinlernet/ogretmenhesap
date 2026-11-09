@@ -1,34 +1,73 @@
 <!doctype html>
 <html lang="tr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#1b5148">
-  <meta name="description" content="Öğretmenler için kişisel çalışma alanı, günlük plan ve öğrenci takibi.">
-  <title>Öğretmen Defteri</title>
-  <link rel="stylesheet" href="./style.css">
-  <script src="./app.js" defer></script>
-</head>
-<body>
-  <aside class="sidebar">
-    <a class="brand" href="#home"><span class="brand-icon">ö.</span><span>öğretmen<span class="brand-sub">DEFTERİ</span></span></a>
-    <p class="nav-label">ÇALIŞMA ALANIM</p>
-    <nav aria-label="Ana menü">
-      <a href="#home" data-nav="home"><span>▦</span> Genel bakış</a>
-      <a href="#students" data-nav="students"><span>♧</span> Öğrencilerim <b id="student-count">0</b></a>
-      <a href="#plan" data-nav="plan"><span>▤</span> Günlük planım</a>
-      <a href="#notes" data-nav="notes"><span>✎</span> Not defterim</a>
-      <a href="#profile" data-nav="profile"><span>◉</span> Kişisel bilgilerim</a>
-    </nav>
-    <div class="sidebar-bottom"><div class="leaf">✳</div><strong>Küçük adımlar,<br>büyük gelecekler.</strong><p>Her güne yeni bir iz bırakın.</p></div>
-    <a class="sidebar-user" href="#profile"><span class="avatar" id="side-initials">Ö</span><span><strong id="side-name">Öğretmenim</strong><small>Öğretmen hesabı</small></span><span>↗</span></a>
-  </aside>
-  <div class="main-wrap">
-    <header class="topbar"><span id="breadcrumb">Çalışma alanım <span>/</span> Genel bakış</span><span class="date-pill" id="today"></span></header>
-    <main id="content" tabindex="-1"></main>
-    <footer>Öğretmen Defteri <span>Size ve öğrencilerinize ayrılmış bir alan.</span></footer>
-  </div>
-  <dialog id="modal"><form id="modal-form"><div class="dialog-head"><h2 id="modal-title"></h2><button type="button" class="icon-button" id="close-modal" aria-label="Kapat">×</button></div><div id="modal-fields"></div><div class="dialog-actions"><button type="button" class="button secondary" id="cancel-modal">Vazgeç</button><button class="button" type="submit">Kaydet</button></div></form></dialog>
-  <div id="toast" role="status" aria-live="polite"></div>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1b5148" />
+    <meta
+      name="description"
+      content="Öğretmenler için kişisel çalışma alanı, günlük plan ve öğrenci takibi."
+    />
+    <title>Öğretmen Defteri</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="#home"
+        ><span class="brand-icon">ö.</span
+        ><span>öğretmen<span class="brand-sub">DEFTERİ</span></span></a
+      >
+      <p class="nav-label" id="workspace-label">ÖĞRENME ALANIM</p>
+      <nav aria-label="Ana menü" id="navigation"></nav>
+      <button class="sql-nav" data-action="sql">⌘ SQL kurulumu</button>
+      <div class="sidebar-bottom">
+        <div class="leaf">✳</div>
+        <strong>Küçük adımlar,<br />büyük gelecekler.</strong>
+        <p>Her güne yeni bir iz bırakın.</p>
+      </div>
+      <a class="sidebar-user" href="#profile"
+        ><span class="avatar" id="side-initials">Ö</span
+        ><span
+          ><strong id="side-name">Öğretmenim</strong
+          ><small id="side-role">Giriş yapın</small></span
+        ><span>↗</span></a
+      >
+    </aside>
+    <div class="main-wrap">
+      <header class="topbar">
+        <span id="breadcrumb">Çalışma alanım <span>/</span> Genel bakış</span
+        ><span class="date-pill" id="today"></span>
+      </header>
+      <main id="content" tabindex="-1"></main>
+      <footer>
+        Öğretmen Defteri <span>Size ve öğrencilerinize ayrılmış bir alan.</span>
+      </footer>
+    </div>
+    <dialog id="modal">
+      <form id="modal-form">
+        <div class="dialog-head">
+          <h2 id="modal-title"></h2>
+          <button
+            type="button"
+            class="icon-button"
+            id="close-modal"
+            aria-label="Kapat"
+          >
+            ×
+          </button>
+        </div>
+        <div id="modal-fields"></div>
+        <div class="dialog-actions">
+          <button type="button" class="button secondary" id="cancel-modal">
+            Vazgeç</button
+          ><button class="button" type="submit">Kaydet</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="setup-dialog" class="setup-dialog">
+      <div id="setup-content"></div>
+    </dialog>
+    <div id="toast" role="status" aria-live="polite"></div>
+  </body>
 </html>
