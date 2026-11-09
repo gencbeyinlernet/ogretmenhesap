@@ -39,6 +39,13 @@ let me = null,
   pollTimer = null,
   busy = false,
   toastTimer;
+let dataRequest = 0,
+  liveTimer,
+  liveInFlight = null,
+  livePending = false,
+  lastLiveCheck = null,
+  liveError = "";
+const livePages = new Set(["home", "assignments", "students", "student"]);
 let conversation = { peer: "", a: "", b: "" },
   game = null;
 const teacher = () => me?.role === "teacher";
@@ -193,6 +200,8 @@ async function all(table, query = "") {
   return result;
 }
 async function load() {
+  const request = ++dataRequest,
+    account = me?.id;
   const queries = {
     contacts: db.rpc("od_contacts"),
     profiles: all("od_profiles", "order=created_at.desc"),
@@ -208,11 +217,14 @@ async function load() {
   if (teacher())
     queries.entries = all("od_teacher_entries", "order=created_at.desc");
   const values = await Promise.all(Object.values(queries));
+  if (request !== dataRequest || me?.id !== account) return false;
   data = Object.fromEntries(Object.keys(queries).map((k, i) => [k, values[i]]));
+  return true;
 }
 async function init() {
   const version = ++loadVersion;
   clearInterval(pollTimer);
+  stopLiveSync();
   me = null;
   data = {};
   if (!db.session) {
@@ -232,6 +244,7 @@ async function init() {
     if (version !== loadVersion) return;
     shell();
     render();
+    startLiveSync();
     await log("login", "Sisteme giriş");
   } catch (err) {
     if (version !== loadVersion) return;
@@ -257,7 +270,7 @@ function points(id) {
       .reduce((a, b) => a + (b.score || 0), 0)
   );
 }
-function home() {
+function homeContent() {
   const ownSubs = data.submissions.filter((s) => s.student_id === me.id);
   return (
     heading(
@@ -271,6 +284,9 @@ function home() {
     ) +
     `<section class="hero"><div class="hero-text"><p class="eyebrow">HER GÜN YENİ BİR BAŞLANGIÇ</p><h2>${teacher() ? "Bir öğretmen dokunur,<br>bir gelecek değişir." : "Küçük adımlar at,<br>büyük hayaller kur."}</h2><p>${teacher() ? "Öğrencilerinize rehberlik edin, öğrenmeyi birlikte büyütün." : "Ödevlerini tamamla, oyunlarla pratik yap, sorularını paylaş."}</p><a class="text-button" href="#${teacher() ? "plan" : "resources"}">${teacher() ? "Günlük planımı aç" : "Oyunları keşfet"} ↗</a></div><div class="dashboard-flower" aria-hidden="true">✳</div></section><section class="stats">${teacher() ? stat("♧", "Öğrenciler", students().length) + stat("▤", "Gönderilen ödevler", data.assignments.length) + stat("✓", "Değerlendirilecek", data.submissions.filter((s) => s.status === "submitted").length) + stat("✎", "Kişisel kayıtlar", data.entries.length) : stat("▤", "Atanan ödevler", data.assignments.length) + stat("✓", "Teslim ettiklerim", ownSubs.length) + stat("↻", "İade edilenler", ownSubs.filter((s) => s.status === "returned").length) + stat("✧", "Toplam puanım", points(me.id))}</section><div class="columns"><section class="card"><div class="card-head"><h2>${teacher() ? "Son ödevler" : "Ödevlerim"}</h2><a class="text-button" href="#assignments">Tümünü gör ↗</a></div><div class="card-body">${assignmentRows(data.assignments.slice(0, 4))}</div></section><section class="card"><div class="card-head"><h2>${teacher() ? "Bugünün planı" : "Puanlarım ve geri bildirimler"}</h2><a class="text-button" href="#${teacher() ? "plan" : "profile"}">Tümünü gör ↗</a></div><div class="card-body">${teacher() ? entryRows(data.entries.filter((x) => x.scheduled_date === today()).slice(0, 5)) : awardsList(me.id)}</div></section></div>${teacher() ? `<div class="section-title"><h2>Öğrencilerim</h2><a class="text-button" href="#students">Tümünü gör ↗</a></div><div class="student-grid">${students().slice(0, 6).map(studentCard).join("") || empty("Öğrenciler kayıt olduğunda burada görünecek.")}</div>` : `<p class="privacy">Mesajlarınızı ve uygulama içi oyun/kaynak etkinliklerinizi öğretmeniniz görebilir. Bu takip yalnızca bu sistem içindeki etkinlikleri kapsar.</p>`}`
   );
+}
+function home() {
+  return homeContent() + (teacher() ? incomingSubmissions() : "");
 }
 function studentList() {
   return (
@@ -315,12 +331,34 @@ function studentDetail(id) {
     `<section class="card profile-card" style="max-width:none;margin-bottom:24px"><div class="profile-banner"><span class="avatar">${e(initials(p.display_name || p.username))}</span><div><h2>${e(p.display_name || p.username)}</h2><p>${e(p.class_name || "Sınıf belirtilmedi")}</p></div></div><div class="detail-info"><div>Okul<strong>${e(p.school || "—")}</strong></div><div>Toplam puan<strong>${points(id)}</strong></div><div>Kayıt tarihi<strong>${date(p.created_at)}</strong></div></div><p class="text-content">${e(p.bio)}</p><a class="button small" href="#messages/${e(id)}">Mesaj gönder</a> <a class="button small secondary" href="#history/${e(id)}">Etkinlik geçmişi</a></section><div class="columns"><section class="card"><div class="card-head"><h2>Ödevler ve teslimler</h2></div><div class="card-body">${assignmentRows(data.assignments.filter((a) => data.recipients.some((r) => r.assignment_id === a.id && r.student_id === id)))}</div></section><section class="card"><div class="card-head"><h2>Puanlar ve geri bildirimler</h2></div><div class="card-body">${awardsList(id)}</div></section></div>`
   );
 }
+function assignmentSummary(assignment) {
+  const recipients = data.recipients.filter(
+    (r) => r.assignment_id === assignment.id,
+  ).length;
+  const submissions = data.submissions.filter(
+    (s) => s.assignment_id === assignment.id,
+  );
+  const pending = submissions.filter((s) => s.status === "submitted").length;
+  return `${submissions.length}/${recipients} teslim${pending ? ` · ${pending} değerlendirme bekliyor` : ""}`;
+}
+function incomingSubmissions() {
+  const rows = data.submissions.filter((s) => s.status === "submitted");
+  return `<section class="card incoming-card"><div class="card-head"><div><h2>Gelen ödevler</h2><p>Değerlendirme bekleyen öğrenci teslimleri</p></div><span class="badge">${rows.length} teslim</span></div><div class="card-body">${
+    rows
+      .slice(0, 10)
+      .map(
+        (s) =>
+          `<a class="schedule" href="#assignments/${e(s.assignment_id)}"><span class="stat-icon">✓</span><div class="schedule-info"><strong>${e(name(s.student_id))} · ${e(data.assignments.find((a) => a.id === s.assignment_id)?.title || "Ödev")}</strong><small>${date(s.submitted_at)}</small></div><span class="badge">İncele ↗</span></a>`,
+      )
+      .join("") || empty("Değerlendirme bekleyen teslim yok.")
+  }</div></section>`;
+}
 function assignmentRows(items) {
   return (
     items
       .map(
         (a) =>
-          `<a class="schedule" href="#assignments/${e(a.id)}"><span class="stat-icon">▤</span><div class="schedule-info"><strong>${e(a.title)}</strong><small>Son teslim: ${date(a.due_date)}</small></div><span class="badge">${teacher() ? data.recipients.filter((r) => r.assignment_id === a.id).length + " öğrenci" : statusLabel(data.submissions.find((s) => s.assignment_id === a.id)?.status)}</span></a>`,
+          `<a class="schedule" href="#assignments/${e(a.id)}"><span class="stat-icon">▤</span><div class="schedule-info"><strong>${e(a.title)}</strong><small>Son teslim: ${date(a.due_date)}</small></div><span class="badge">${teacher() ? assignmentSummary(a) : statusLabel(data.submissions.find((s) => s.assignment_id === a.id)?.status)}</span></a>`,
       )
       .join("") || empty("Henüz ödev yok.")
   );
@@ -390,6 +428,25 @@ function entriesPage(page) {
 }
 const DRIVE_FOLDER =
   "https://drive.google.com/drive/folders/1YWNJgTheUk5FufTW4qqALOpev5vVUBrz?usp=sharing";
+const SHARED_GAMES = [
+  {
+    id: "shared-speaklab",
+    title: "SpeakLab İngilizce Atölyesi",
+    url: "https://speaklab-ingilizce-atolyesi.gencbeyinlernet.chatgpt.site",
+    kind: "game",
+    builtin: true,
+  },
+];
+function resources() {
+  const saved = data.resources || [];
+  const canonical = (url) => String(url).replace(/\/+$/, "");
+  return [
+    ...saved,
+    ...SHARED_GAMES.filter(
+      (game) => !saved.some((r) => canonical(r.url) === canonical(game.url)),
+    ),
+  ];
+}
 function isDriveResource(resource) {
   try {
     return ["drive.google.com", "docs.google.com"].includes(
@@ -404,10 +461,10 @@ function appCard(resource) {
   return `<article class="student-card"><p class="eyebrow">${drive ? "GOOGLE DRIVE" : "ÇEVRİMİÇİ UYGULAMA"}</p><h3>${e(resource.title)}</h3><p class="subtitle resource-url">${e(resource.url)}</p><div class="student-card-bottom">${drive ? `<a class="text-button" href="${e(resource.url)}" target="_blank" rel="noopener noreferrer" data-action="drive-link" data-title="${e(resource.title)}">Drive bağlantısını aç ↗</a>` : `<button class="text-button" data-action="open-resource" data-id="${e(resource.id)}">Uygulamayı aç ↗</button>`}</div></article>`;
 }
 function appsPage() {
-  const drive = data.resources.filter(isDriveResource);
+  const drive = resources().filter(isDriveResource);
   if (!drive.some((r) => r.url === DRIVE_FOLDER))
     drive.unshift({ title: "Drive oyun klasörüm", url: DRIVE_FOLDER });
-  const online = data.resources.filter((r) => !isDriveResource(r));
+  const online = resources().filter((r) => !isDriveResource(r));
   return (
     heading(
       "Uygulamalarım",
@@ -424,7 +481,14 @@ function resourcePage() {
       "Oyunlar ve öğretmeninizin seçtiği kaynaklar.",
       teacher() ? button("add-resource", "＋ Kaynak ekle") : "",
     ) +
-    `<div class="student-grid"><a class="student-card" href="#game"><p class="eyebrow">UYGULAMA İÇİ OYUN</p><h3>✧ Matematik Atölyesi</h3><p class="subtitle">10 soruda dört işlem becerini test et.</p><div class="student-card-bottom"><span>Her seferinde yeni sorular</span><span>Oyna →</span></div></a>${data.resources.map((r) => `<article class="student-card"><p class="eyebrow">${r.kind === "game" ? "OYUN" : "WEB KAYNAĞI"}</p><h3>${e(r.title)}</h3><p class="subtitle resource-url">${e(r.url)}</p><div class="student-card-bottom"><button class="text-button" data-action="open-resource" data-id="${e(r.id)}">Kaynağı aç ↗</button>${teacher() ? `<button class="icon-button" data-action="delete-resource" data-id="${e(r.id)}" aria-label="Kaynağı sil">×</button>` : ""}</div></article>`).join("")}</div><p class="privacy">${teacher() ? "Öğrencilerin bu alandan açtığı kaynaklar ve tamamladığı oyunlar etkinlik geçmişine kaydedilir." : "Bu alandan açtığınız oyun ve sitenin adı ile açılma zamanı öğretmeninize kaydedilir. Harici sitede ne yaptığınız veya başka sitelere geçişiniz izlenmez."}</p>`
+    `<div class="student-grid"><a class="student-card" href="#game"><p class="eyebrow">UYGULAMA İÇİ OYUN</p><h3>✧ Matematik Atölyesi</h3><p class="subtitle">10 soruda dört işlem becerini test et.</p><div class="student-card-bottom"><span>Her seferinde yeni sorular</span><span>Oyna →</span></div></a>${resources()
+      .map(
+        (r) =>
+          `<article class="student-card"><p class="eyebrow">${r.kind === "game" ? "OYUN" : "WEB KAYNAĞI"}</p><h3>${e(r.title)}</h3><p class="subtitle resource-url">${e(r.url)}</p><div class="student-card-bottom"><button class="text-button" data-action="open-resource" data-id="${e(r.id)}">Kaynağı aç ↗</button>${teacher() && !r.builtin ? `<button class="icon-button" data-action="delete-resource" data-id="${e(r.id)}" aria-label="Kaynağı sil">×</button>` : ""}</div></article>`,
+      )
+      .join(
+        "",
+      )}</div><p class="privacy">${teacher() ? "Öğrencilerin bu alandan açtığı kaynaklar ve tamamladığı oyunlar etkinlik geçmişine kaydedilir." : "Bu alandan açtığınız oyun ve sitenin adı ile açılma zamanı öğretmeninize kaydedilir. Harici sitede ne yaptığınız veya başka sitelere geçişiniz izlenmez."}</p>`
   );
 }
 function profile() {
@@ -560,7 +624,13 @@ function render() {
   else if (page === "history") html = historyPage(id);
   else if (page === "game") html = gamePage();
   else html = home();
-  $("#content").innerHTML = html;
+  $("#content").innerHTML =
+    html +
+    (livePages.has(page)
+      ? `<div class="sync-status" role="status" aria-live="polite"><span id="sync-status-text"></span><button class="text-button" data-action="sync">↻ Teslimleri yenile</button></div>`
+      : "");
+  paintLiveStatus();
+  paintAssignmentBadge();
   document
     .querySelectorAll("[data-nav]")
     .forEach((a) =>
@@ -674,8 +744,100 @@ async function loadHistory(reset = false) {
   else $("#history-log").insertAdjacentHTML("beforeend", html);
   $("#older-history").hidden = rows.length < 100;
 }
+function paintAssignmentBadge() {
+  const nav = document.querySelector('nav a[data-nav="assignments"]');
+  if (!nav || !me) return;
+  nav.querySelector("b")?.remove();
+  const count = teacher()
+    ? data.submissions.filter((s) => s.status === "submitted").length
+    : data.assignments.filter(
+        (a) =>
+          !data.submissions.some(
+            (s) => s.assignment_id === a.id && s.status !== "returned",
+          ),
+      ).length;
+  if (count)
+    nav.insertAdjacentHTML(
+      "beforeend",
+      `<b aria-label="${teacher() ? "Değerlendirme bekleyen teslim" : "Bekleyen ödev"}">${count}</b>`,
+    );
+}
+function paintLiveStatus() {
+  const el = $("#sync-status-text");
+  if (!el) return;
+  el.textContent = liveError
+    ? "Teslimler güncellenemedi: " + liveError
+    : lastLiveCheck
+      ? `Son kontrol: ${lastLiveCheck.toLocaleTimeString("tr-TR")} · Açık ekranda 10 saniyede bir yenilenir.`
+      : "Teslimler kontrol ediliyor…";
+  el.parentElement.classList.toggle("sync-error", !!liveError);
+}
+function canRefreshView() {
+  return (
+    !busy &&
+    !$("#modal").open &&
+    !$("#setup-dialog").open &&
+    !$("#submission-form")?.dataset.dirty &&
+    !document.activeElement?.matches(
+      "#content input, #content textarea, #content select",
+    )
+  );
+}
+function stopLiveSync() {
+  clearInterval(liveTimer);
+  ++dataRequest;
+  liveInFlight = null;
+  livePending = false;
+  lastLiveCheck = null;
+  liveError = "";
+}
+function startLiveSync() {
+  lastLiveCheck = new Date();
+  paintLiveStatus();
+  clearInterval(liveTimer);
+  liveTimer = setInterval(() => syncIncoming(), 10000);
+}
+async function syncIncoming(force = false) {
+  if (
+    !me ||
+    (!force && (document.hidden || !livePages.has(route().split("/")[0])))
+  )
+    return;
+  if (liveInFlight) return liveInFlight;
+  if (busy || $("#modal").open || $("#setup-dialog").open) return;
+  const account = me.id;
+  const before = JSON.stringify(data);
+  const operation = (async () => {
+    try {
+      const loaded = await load();
+      if (!loaded || me?.id !== account) return;
+      lastLiveCheck = new Date();
+      liveError = "";
+      livePending ||= before !== JSON.stringify(data);
+      if (
+        livePending &&
+        livePages.has(route().split("/")[0]) &&
+        canRefreshView()
+      ) {
+        livePending = false;
+        render();
+      }
+      paintAssignmentBadge();
+    } catch (err) {
+      if (me?.id === account) liveError = errorText(err);
+    } finally {
+      if (liveInFlight === operation) liveInFlight = null;
+      paintLiveStatus();
+    }
+  })();
+  liveInFlight = operation;
+  return operation;
+}
 async function refreshPage() {
-  await load();
+  if (!(await load())) return;
+  lastLiveCheck = new Date();
+  liveError = "";
+  livePending = false;
   shell();
   render();
 }
@@ -762,6 +924,7 @@ async function action(key, el) {
   if (key === "logout") {
     ++loadVersion;
     clearInterval(pollTimer);
+    stopLiveSync();
     try {
       await db.signOut();
     } catch {}
@@ -776,6 +939,7 @@ async function action(key, el) {
   }
   if (key === "retry") return init();
   if (!me) return;
+  if (key === "sync") return syncIncoming(true);
   if (key === "reload") {
     await refreshPage();
     toast("Bilgiler yenilendi.");
@@ -921,7 +1085,7 @@ async function action(key, el) {
   }
   if (key === "drive-link") await log("resource", el.dataset.title, el.href);
   if (key === "open-resource") {
-    const r = data.resources.find((r) => r.id === el.dataset.id);
+    const r = resources().find((r) => r.id === el.dataset.id);
     if (!r) return;
     const url = new URL(r.url);
     if (url.protocol !== "https:") throw Error("Geçersiz kaynak bağlantısı.");
@@ -1001,8 +1165,37 @@ async function submit(form) {
       p_assignment: form.dataset.id,
       p_content: content,
     });
-    await refreshPage();
-    toast("Ödeviniz öğretmeninize gönderildi.");
+    let rows;
+    try {
+      rows = await db.get(
+        "od_submissions",
+        `assignment_id=eq.${form.dataset.id}&student_id=eq.${me.id}`,
+      );
+      if (!rows[0]) throw Error("Kaydedilen teslim henüz okunamadı.");
+    } catch (err) {
+      form.dataset.dirty = "";
+      form.dataset.accepted = "true";
+      livePending = true;
+      const notice =
+        form.querySelector(".submission-result") || document.createElement("p");
+      notice.className = "submission-result auth-error";
+      notice.setAttribute("role", "alert");
+      notice.textContent =
+        "Sunucu teslim isteğinizi kabul etti ancak kayıt henüz doğrulanamadı. Teslimleri yenile düğmesiyle durumu kontrol edin; hemen tekrar göndermeyin. " +
+        errorText(err);
+      form.append(notice);
+      return;
+    }
+    data.submissions = [
+      ...data.submissions.filter(
+        (s) => s.assignment_id !== form.dataset.id || s.student_id !== me.id,
+      ),
+      rows[0],
+    ];
+    render();
+    toast(
+      "Ödeviniz veritabanına kaydedildi. Öğretmeninizin gelen ödevler listesine iletildi.",
+    );
   }
   if (form.id === "message-form") {
     const body = form.body.value.trim();
@@ -1060,10 +1253,12 @@ document.addEventListener("submit", async (event) => {
   } finally {
     busy = false;
     if (form.id === "auth-form") paintAuthButton();
-    else if (btn) btn.disabled = false;
+    else if (btn) btn.disabled = !!form.dataset.accepted;
   }
 });
 document.addEventListener("input", (event) => {
+  const draft = event.target.closest("#submission-form");
+  if (draft) draft.dataset.dirty = "true";
   if (event.target.id === "student-search") {
     const q = event.target.value.toLocaleLowerCase("tr-TR");
     const filtered = students().filter((p) =>
@@ -1108,6 +1303,7 @@ window.addEventListener("od-signed-out", () => {
   me = null;
   data = {};
   clearInterval(pollTimer);
+  stopLiveSync();
   login();
   toast("Oturumunuz sona erdi. Lütfen yeniden giriş yapın.");
 });
@@ -1117,10 +1313,15 @@ window.addEventListener("storage", (event) => {
 window.addEventListener("hashchange", () => {
   if (me) {
     render();
+    syncIncoming();
     log("page", labels[route().split("/")[0]] || "Genel bakış");
     if (route() === "game") log("game", "Matematik Atölyesi başlatıldı");
   } else login();
   window.scrollTo(0, 0);
+});
+window.addEventListener("focus", () => syncIncoming());
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) syncIncoming();
 });
 $("#today").textContent =
   "◷ " +

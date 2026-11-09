@@ -285,7 +285,13 @@ async function mock(route) {
   await page.getByRole("button", { name: "Kaydet", exact: true }).click();
   await page.getByRole("heading", { name: "Online uygulamam" }).waitFor();
   const onlinePopup = page.waitForEvent("popup");
-  await page.getByRole("button", { name: "Uygulamayı aç ↗" }).click();
+  await page
+    .locator(".student-card")
+    .filter({
+      has: page.getByRole("heading", { name: "Online uygulamam", exact: true }),
+    })
+    .getByRole("button", { name: "Uygulamayı aç ↗" })
+    .click();
   const onlinePage = await onlinePopup;
   await onlinePage.waitForURL("https://example.org/app");
   await onlinePage.close();

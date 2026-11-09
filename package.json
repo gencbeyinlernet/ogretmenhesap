@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/database.test.cjs tests/auth.test.cjs",
-    "test:browser": "node tests/browser.test.cjs"
+    "test:browser": "node tests/browser.test.cjs",
+    "test:delivery": "node tests/delivery.browser.cjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.16",

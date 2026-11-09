@@ -33,7 +33,9 @@ SQL yeniden çalıştırılabilir; kayıtları ve mevcut öğretmenin parolasın
 - Öğretmenin özel yıllık planları, ders modülleri, günlük aktiviteleri, ders programı ve notları.
 - **Uygulamalarım** menüsü öğretmen ve öğrenci panelinde bulunur. Çevrimiçi kaynaklar doğrudan açılır; Drive kaynakları Google Drive bağlantısı olarak açılır. Paylaşılan Drive oyun klasörü başlangıç bağlantısı olarak eklenmiştir; klasör içeriği otomatik listelenmez. Öğretmen yeni uygulama bağlantılarını Supabase üzerinde saklayarak ekleyebilir.
 - Kaynak/oyun bağlantıları ve 10 soruluk dahili matematik oyunu. Öğrenci girişleri, sayfa geçişleri, bu uygulamadan kaynak açma ve oyun sonuçları kaydedilir. Etkinlik geçmişini sadece öğretmen okuyabilir. Bu, güvenilir bir sınav denetimi değildir; istemciden gönderilen oyun puanları eğitim amaçlıdır, öğrenci teknik yollarla etkinlik göndermeyi durdurabilir veya sahte oyun sonucu gönderebilir. Diğer web sitelerindeki tarayıcı geçmişini okumaz/izlemez.
-- Mesajlar açıkken 10 saniyede bir yenilenir; önceki mesajlar ve geçmiş sayfalı yüklenir. Diğer listeler sayfa açılışında alınır, Yenile ile güncellenir.
+- Mesajlar açıkken 10 saniyede bir yenilenir; önceki mesajlar ve geçmiş sayfalı yüklenir. Ana ekran, ödevler ve öğrenci takibi açıkken teslimler 10 saniyede bir kontrol edilir; sekmeye dönüldüğünde veya ilgili menü açıldığında da yenilenir. Bağlantı hatası son kontrol alanında gösterilir. Yazılmakta olan ödev taslakları ve açık değerlendirme pencereleri otomatik yenilemeyle silinmez.
+- Öğretmen ana ekranındaki **Gelen ödevler**, teslim sayıları ve menü rozeti değerlendirme bekleyen kayıtları gösterir. Öğrenci teslimi, RPC kabulünden sonra `od_submissions` kaydı okunarak doğrulanır. Sunucu kabul edip doğrulama bağlantısı kesilirse tekrar gönderim kapatılır; **Teslimleri yenile** ile mevcut kayıt kontrol edilir. Bu düzeltme için yeni SQL çalıştırmak gerekmez.
+- **SpeakLab İngilizce Atölyesi** öğretmen ve öğrenci panellerinde Uygulamalarım / Oyunlar ve siteler altında hazır bağlantı olarak bulunur. Öğrencinin buradan açması etkinlik geçmişine kaydedilir. Harici SpeakLab sitesinin içeriği veya oyun skorları bu bağlantıyla değiştirilmez/otomatik aktarılmaz.
 - İlk sürümün yerel kayıtları eski `ogretmen-defteri-v1` anahtarında korunur; otomatik olarak hesaplarla ilişkilendirilmez. Yeni uygulama kayıtları Supabase veritabanındadır. Oturum belirteçleri bu tarayıcıda saklanır; paylaşılan cihazlarda çıkış yapın.
 
 ## Yerel geliştirme
@@ -48,11 +50,12 @@ Uygulamanın çalışması için npm paketi veya derleme gerekmez. Test bağıml
 npm test
 # Sunucu açıkken, Chromium kurulu ortamda:
 CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
+CHROMIUM_PATH=/usr/bin/chromium npm run test:delivery
 ```
 
 `npm test`, PGlite PostgreSQL üzerinde gerçek şemayı iki kez çalıştırır; anonim erişim, öğrenci rolünü yükseltme, konuşma gizliliği, ödev yetkileri, teslim/iade/puanlama, özel öğretmen kayıtları ve geçmiş politikalarını sınar. Supabase'in `auth.users`, `auth.identities` ve `auth.uid()` sözleşmeleri yerel testte taklit edilir; bu test gerçek GoTrue servisini doğrulamaz.
 
-Tarayıcı testi giriş/kayıt, SQL kopyalama, öğretmen/öğrenci ekranları, mesajlar, ödevler, yıllık plan, oyun ve mobil görünümü API taklidiyle sınar. Gerçek Supabase kurulumundan sonra en az iki ayrı öğrenci ve bir öğretmen oturumuyla uçtan uca kontrol yapılmalıdır.
+Tarayıcı testi giriş/kayıt, SQL kopyalama, öğretmen/öğrenci ekranları, mesajlar, ödevler, yıllık plan, oyun ve mobil görünümü API taklidiyle sınar. `test:delivery`, iki bağımsız tarayıcı oturumunu gerçek PGlite PostgreSQL şemasına bağlayan bir REST test adaptörüyle çalışır. Teslimin açık öğretmen ekranına gelmesi, geri iadenin öğrenciye ulaşması, taslakların korunması, bağlantı kesintisi/yeniden deneme, çift gönderimin engellenmesi ve SpeakLab açılış kayıtları sınanır. Gerçek Supabase Auth ve canlı yayın bu adaptörün kapsamı dışındadır. Gerçek Supabase kurulumundan sonra en az iki ayrı öğrenci ve bir öğretmen oturumuyla uçtan uca kontrol yapılmalıdır.
 
 ## Yayın
 
