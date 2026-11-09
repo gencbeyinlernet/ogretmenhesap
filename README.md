@@ -38,19 +38,27 @@ SQL yeniden çalıştırılabilir; kayıtları ve mevcut öğretmenin parolasın
 - **SpeakLab İngilizce Atölyesi** ve **Harf Mario Macerası** öğretmen ve öğrenci panellerinde Uygulamalarım / Oyunlar ve siteler altında hazır bağlantı olarak bulunur. Öğrencinin buradan açması etkinlik geçmişine kaydedilir. Harici sitelerin içeriği veya oyun skorları bu bağlantılarla değiştirilmez/otomatik aktarılmaz.
 - İlk sürümün yerel kayıtları eski `ogretmen-defteri-v1` anahtarında korunur; otomatik olarak hesaplarla ilişkilendirilmez. Yeni uygulama kayıtları Supabase veritabanındadır. Oturum belirteçleri bu tarayıcıda saklanır; paylaşılan cihazlarda çıkış yapın.
 
+## TÜBİTAK Projesi Hazırla
+
+Öğretmen ve öğrenci menüsünde renkli bir proje atölyesi bulunur. 2027 2204-A rehberi ve sağlanan Word şablonuna göre altı adım, kelime kontrolleri, iş-zaman çizelgesi, önizleme ve gerçek `.docx` indirme sunar. Öğrenciler kendi taslaklarını düzenler; öğretmen öğrenci raporlarını salt okunur inceleyebilir.
+
+Bulut kayıt için mevcut projede `supabase/projects.sql` çalıştırılmalıdır. Gemini için `project-assistant` Edge Function'ı ayrıca dağıtılmalı ve `GEMINI_API_KEY` yalnızca Supabase Secrets'ta tanımlanmalıdır. Arayüz bu bağlantı kurulmadan AI çalışıyormuş gibi davranmaz; elle yazım ve Word indirme kullanılabilir. Ayrıntılar: [kurulum ve kaynak kuralları](docs/tubitak-setup.md).
+
 ## Yerel geliştirme
 
 ```sh
 python3 -m http.server 8000 --bind 0.0.0.0
 ```
 
-Uygulamanın çalışması için npm paketi veya derleme gerekmez. Test bağımlılıkları için Node.js 22+ ve `npm ci` kullanın.
+Word dışa aktarım modülünü hazırlamak için Node.js 22+, `npm ci` ve `npm run build` kullanın. Diğer ekranlar statik modüllerdir; uygulama sunucusu için yukarıdaki Python komutu yeterlidir.
 
 ```sh
 npm test
 # Sunucu açıkken, Chromium kurulu ortamda:
 CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
 CHROMIUM_PATH=/usr/bin/chromium npm run test:delivery
+npm run test:projects
+npm run test:project-browser
 ```
 
 `npm test`, PGlite PostgreSQL üzerinde gerçek şemayı iki kez çalıştırır; anonim erişim, öğrenci rolünü yükseltme, konuşma gizliliği, ödev yetkileri, teslim/iade/puanlama, özel öğretmen kayıtları ve geçmiş politikalarını sınar. Supabase'in `auth.users`, `auth.identities` ve `auth.uid()` sözleşmeleri yerel testte taklit edilir; bu test gerçek GoTrue servisini doğrulamaz.

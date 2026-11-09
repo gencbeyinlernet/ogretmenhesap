@@ -1,3 +1,4 @@
+const APP_URL = process.env.TEST_BASE_URL || "http://127.0.0.1:8000";
 // UI + actual PostgreSQL schema/RLS/RPC integration. Only HTTP transport/Auth are simulated.
 const { PGlite } = require("@electric-sql/pglite");
 const { pgcrypto } = require("@electric-sql/pglite/contrib/pgcrypto");
@@ -197,7 +198,7 @@ const SPEAKLAB =
       const page = await context.newPage();
       page.on("pageerror", (e) => errors.push(e.message));
       await page.clock.install();
-      await page.goto("http://127.0.0.1:8000/#" + hash);
+      await page.goto(APP_URL + "/#" + hash);
       await page.locator('nav a[data-nav="assignments"]').waitFor();
       await page.locator("#sync-status-text").waitFor();
       return page;
@@ -297,7 +298,7 @@ const SPEAKLAB =
       .waitFor();
     // Readback failure must not display an unverified success or let the student double-send.
     const second = await makeAssignment("İkinci çalışma");
-    await studentPage.goto("http://127.0.0.1:8000/#assignments/" + second);
+    await studentPage.goto(APP_URL + "/#assignments/" + second);
     await studentPage
       .getByLabel("Yanıtınız (metin veya çalışma bağlantısı)")
       .fill("İkinci teslim");
@@ -339,14 +340,12 @@ const SPEAKLAB =
     // SpeakLab is available to both roles and records the student's launch using the real log policy.
     for (const page of [teacherPage, studentPage]) {
       await page.locator('nav a[href="#apps"]').click();
-      const card = page
-        .locator(".student-card")
-        .filter({
-          has: page.getByRole("heading", {
-            name: "SpeakLab İngilizce Atölyesi",
-            exact: true,
-          }),
-        });
+      const card = page.locator(".student-card").filter({
+        has: page.getByRole("heading", {
+          name: "SpeakLab İngilizce Atölyesi",
+          exact: true,
+        }),
+      });
       await card.waitFor();
       const popup = page.waitForEvent("popup");
       await card.getByRole("button", { name: "Uygulamayı aç ↗" }).click();

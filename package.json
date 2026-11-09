@@ -6,10 +6,18 @@
   "scripts": {
     "test": "node --test tests/database.test.cjs tests/auth.test.cjs",
     "test:browser": "node tests/browser.test.cjs",
-    "test:delivery": "node tests/delivery.browser.cjs"
+    "test:delivery": "node tests/delivery.browser.cjs",
+    "build": "esbuild project-document.js --bundle --format=esm --platform=browser --target=es2022 --outfile=vendor/project-document.js --minify --legal-comments=eof && esbuild supabase/functions/project-assistant/index.ts --bundle --format=esm --platform=neutral --target=es2022 --outfile=deployment/project-assistant.js",
+    "test:projects": "node --test tests/projects.test.cjs",
+    "test:project-browser": "node tests/projects.browser.cjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.16",
+    "esbuild": "0.25.12",
     "playwright": "1.62.1"
+  },
+  "dependencies": {
+    "buffer": "6.0.3",
+    "docx": "9.5.1"
   }
 }

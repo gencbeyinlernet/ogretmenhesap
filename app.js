@@ -1,4 +1,5 @@
 import { db, friendlyError } from "./backend.js";
+import { createProjectWorkspace } from "./project-workspace.js";
 const $ = (s) => document.querySelector(s);
 const e = (s) =>
   String(s ?? "").replace(
@@ -65,6 +66,7 @@ const labels = {
   history: "Etkinlik geçmişi",
   resources: "Oyunlar ve siteler",
   apps: "Uygulamalarım",
+  projects: "TÜBİTAK Projesi Hazırla",
   annual: "Yıllık planlar",
   modules: "Ders modülleri",
   activity: "Günlük aktiviteler",
@@ -116,6 +118,7 @@ function shell() {
   const nav = teacher()
     ? [
         "home",
+        "projects",
         "students",
         "assignments",
         "messages",
@@ -130,13 +133,21 @@ function shell() {
         "notes",
         "profile",
       ]
-    : ["home", "assignments", "messages", "apps", "resources", "profile"];
+    : [
+        "home",
+        "projects",
+        "assignments",
+        "messages",
+        "apps",
+        "resources",
+        "profile",
+      ];
   const icons = ["▦", "♧", "▤", "✉", "◉", "◷", "✧"];
   $("#navigation").innerHTML =
     nav
       .map(
         (key, i) =>
-          `<a href="#${key}" data-nav="${key}"><span>${icons[i % icons.length]}</span>${labels[key]}</a>` +
+          `<a href="#${key}" data-nav="${key}" ${key === "projects" ? 'class="project-nav"' : ""}><span>${key === "projects" ? "✦" : icons[i % icons.length]}</span>${labels[key]}</a>` +
           (key === "students" && teacher()
             ? `<a href="${e(STUDENT_SHEET)}" target="_blank" rel="noopener noreferrer" class="attendance-link"><span>▥</span>Not ve devamsızlık ↗</a>`
             : ""),
@@ -225,6 +236,7 @@ async function init() {
   const version = ++loadVersion;
   clearInterval(pollTimer);
   stopLiveSync();
+  projectWorkspace.unmount();
   me = null;
   data = {};
   if (!db.session) {
@@ -599,7 +611,18 @@ function gamePage() {
     `<section class="card game-card"><p class="eyebrow">SORU ${game.index + 1} / 10</p><div class="game-question">${q.a} ${q.op} ${q.b} = ?</div><form id="game-form"><label for="game-answer">Cevabınız</label><input id="game-answer" name="answer" type="number" required autocomplete="off" autofocus><button class="button">Cevapla →</button></form><p class="subtitle">${game.correct} doğru cevap</p></section>`
   );
 }
+const projectWorkspace = createProjectWorkspace({
+  db,
+  getUser: () => me,
+  toast,
+  onSetup: async () => {
+    await setup();
+    $("#f-setupMode").value = "projects";
+    await loadSetupSQL("projects");
+  },
+});
 function render() {
+  projectWorkspace.unmount();
   if (!me) {
     login();
     return;
@@ -625,6 +648,7 @@ function render() {
   else if (kinds[page]) html = entriesPage(page);
   else if (page === "resources") html = resourcePage();
   else if (page === "apps") html = appsPage();
+  else if (page === "projects") html = '<div id="project-workspace"></div>';
   else if (page === "profile") html = profile();
   else if (page === "messages" || page === "monitor")
     html = messages(page === "monitor", id);
@@ -656,6 +680,8 @@ function render() {
     }, 10000);
   }
   if (page === "history") loadHistory(true).catch(fail);
+  if (page === "projects")
+    projectWorkspace.mount($("#project-workspace"), id).catch(fail);
 }
 let chatRows = [],
   chatPair = "",
@@ -855,13 +881,16 @@ async function loadSetupSQL(mode) {
   delete dlg.dataset.template;
   $("#setup-sql").value = "SQL yükleniyor…";
   $("#setup-status").textContent = "";
+  $("#setup-password").closest(".field").hidden = mode === "projects";
   document.querySelector('label[for="setup-password"]').textContent =
     mode === "repair" ? "Yeni öğretmen şifresi" : "Öğretmen başlangıç şifresi";
   try {
     const response = await fetch(
-      mode === "repair"
-        ? "./supabase/repair-auth.sql"
-        : "./supabase/schema.sql",
+      mode === "projects"
+        ? "./supabase/projects.sql"
+        : mode === "repair"
+          ? "./supabase/repair-auth.sql"
+          : "./supabase/schema.sql",
     );
     if (!response.ok) throw Error("SQL dosyası yüklenemedi.");
     const sql = await response.text();
@@ -881,6 +910,7 @@ async function setup() {
     [
       ["install", "İlk kurulum (mevcut parolayı değiştirmez)"],
       ["repair", "Giriş onarımı (öğretmen parolasını değiştirir)"],
+      ["projects", "TÜBİTAK proje tabloları (parola gerekmez)"],
     ],
   )}<ol class="setup-steps"><li>Kurulumda Success gördüyseniz ve öğretmen girişi başarısızsa <strong>Giriş onarımı</strong> seçin. Bu işlem öğrenci kayıtlarını, mesajları veya ödevleri silmez.</li><li>Aşağıya öğretmen şifresini yazın. Yalnızca kopyalanan SQL'e eklenir, dosyalara kaydedilmez.</li><li>SQL'i kopyalayıp <a href="https://supabase.com/dashboard/project/rfmelsdtasxoddtolqpb/sql/new" target="_blank" rel="noopener noreferrer">Supabase SQL Editor</a> içinde çalıştırın. Success sonucunu bekleyin.</li><li><strong>Authentication → Sign In / Providers → Email</strong>: Email sağlayıcısını ve yeni kayıtları açık tutun, <strong>Confirm email</strong> seçeneğini kapatın. Onarım SQL'i mevcut uygulama hesaplarını da onaylar.</li><li><strong>Giriş yap</strong> sekmesinde <strong>burakturgut</strong> ve belirlediğiniz şifreyi kullanın. Öğretmen hesabı için Öğrenci kaydı kullanmayın.</li></ol><div class="field"><label for="setup-password">Öğretmen başlangıç şifresi</label><input type="password" id="setup-password" minlength="6" maxlength="128" autocomplete="new-password" placeholder="Girişte kullanacağınız şifreyi yazın"></div><p class="notice">429, Supabase istek sınırıdır; uygulama bekleme süresini gösterir. Parola veya SQL'i paylaşmayın. Onarım SQL'i yalnızca SQL Editor yetkisi olan proje sahibi tarafından çalıştırılabilir.</p><label class="sr-only" for="setup-sql">Kurulum SQL kodu</label><textarea id="setup-sql" class="sql-code" readonly spellcheck="false"></textarea><div class="dialog-actions">${button("copy-sql", "SQL kodunu kopyala")}${button("close-sql", "Kapat", "", true)}</div><p id="setup-status" role="status"></p>`;
   dlg.showModal();
@@ -895,8 +925,9 @@ async function action(key, el) {
     return;
   }
   if (key === "copy-sql") {
-    const password = $("#setup-password").value;
-    if (password.length < 6) {
+    const projectMode = $("#f-setupMode").value === "projects";
+    const password = projectMode ? "" : $("#setup-password").value;
+    if (!projectMode && password.length < 6) {
       $("#setup-status").textContent =
         "En az 6 karakterli başlangıç şifresi girin.";
       $("#setup-password").focus();
@@ -932,6 +963,7 @@ async function action(key, el) {
     ++loadVersion;
     clearInterval(pollTimer);
     stopLiveSync();
+    projectWorkspace.unmount();
     try {
       await db.signOut();
     } catch {}
@@ -1311,6 +1343,7 @@ window.addEventListener("od-signed-out", () => {
   data = {};
   clearInterval(pollTimer);
   stopLiveSync();
+  projectWorkspace.unmount();
   login();
   toast("Oturumunuz sona erdi. Lütfen yeniden giriş yapın.");
 });

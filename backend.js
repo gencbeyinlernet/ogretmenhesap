@@ -58,7 +58,7 @@ function storeSession(value) {
 }
 async function request(
   path,
-  { method = "GET", body, auth = true, headers = {} } = {},
+  { method = "GET", body, auth = true, headers = {}, timeoutMs = 20000 } = {},
 ) {
   if (auth && !session?.access_token)
     throw new Error("Kullanıcı girişi gerekiyor.");
@@ -71,7 +71,7 @@ async function request(
       ...headers,
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const raw = await response.text();
   let data;
@@ -131,18 +131,21 @@ async function refresh() {
     })();
   return refreshPending;
 }
-async function api(path, options = {}) {
+async function authenticatedRequest(path, options = {}) {
   if (session?.expires_at && session.expires_at * 1000 < Date.now() + 60000)
     await refresh();
   try {
-    return await request("/rest/v1/" + path, options);
+    return await request(path, options);
   } catch (error) {
     if (error.status === 401 && session?.refresh_token) {
       await refresh();
-      return request("/rest/v1/" + path, options);
+      return request(path, options);
     }
     throw error;
   }
+}
+function api(path, options = {}) {
+  return authenticatedRequest("/rest/v1/" + path, options);
 }
 export const db = {
   get session() {
@@ -205,6 +208,27 @@ export const db = {
   },
   async remove(table, query) {
     return api(table + "?" + query, { method: "DELETE" });
+  },
+  async edge(name, body = {}) {
+    return authenticatedRequest("/functions/v1/" + name, {
+      method: "POST",
+      body,
+      timeoutMs: 95000,
+    });
+  },
+  async insertReturning(table, body) {
+    return api(table, {
+      method: "POST",
+      body,
+      headers: { Prefer: "return=representation" },
+    });
+  },
+  async updateReturning(table, query, body) {
+    return api(table + "?" + query, {
+      method: "PATCH",
+      body,
+      headers: { Prefer: "return=representation" },
+    });
   },
   async rpc(name, body = {}) {
     return api("rpc/" + name, { method: "POST", body });

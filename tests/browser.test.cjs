@@ -1,3 +1,4 @@
+const APP_URL = process.env.TEST_BASE_URL || "http://127.0.0.1:8000";
 // The browser contract is mocked; actual RLS/RPC behavior is tested in database.test.cjs.
 const { chromium } = require("playwright");
 const assert = require("node:assert/strict");
@@ -213,7 +214,7 @@ async function mock(route) {
   const page = await context.newPage(),
     errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("http://127.0.0.1:8000");
+  await page.goto(APP_URL);
   await page.getByRole("button", { name: "SQL kurulumu" }).click();
   await page.locator("#setup-sql").filter({ hasText: "" }).waitFor();
   await page.waitForFunction(
@@ -427,7 +428,7 @@ async function mock(route) {
     },
   );
   const ratePage = await rateContext.newPage();
-  await ratePage.goto("http://127.0.0.1:8000");
+  await ratePage.goto(APP_URL);
   await ratePage
     .getByRole("button", { name: "Öğrenci kaydı", exact: true })
     .click();
