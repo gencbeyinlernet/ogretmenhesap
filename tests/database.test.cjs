@@ -318,5 +318,47 @@ test("Schema installation, repeatability and teacher/student authorization", asy
       );
     },
   );
+  await t.test(
+    "auth repair resets only teacher password and confirms app accounts without deleting data",
+    async () => {
+      const before = {};
+      for (const table of [
+        "od_profiles",
+        "od_assignments",
+        "od_messages",
+        "od_submissions",
+      ])
+        before[table] = await scalar("select count(*)::int from " + table);
+      await db.query(
+        "update auth.users set email_confirmed_at=null where id=$1",
+        [a],
+      );
+      const repair = readFileSync("supabase/repair-auth.sql", "utf8").replace(
+        "__TEACHER_PASSWORD__",
+        "repaired-test-password",
+      );
+      await db.exec(repair);
+      await db.exec(repair);
+      assert.equal(
+        await scalar(
+          "select encrypted_password=extensions.crypt('repaired-test-password',encrypted_password) from auth.users where id=$1",
+          [admin],
+        ),
+        true,
+      );
+      assert.equal(
+        await scalar(
+          "select email_confirmed_at is not null from auth.users where id=$1",
+          [a],
+        ),
+        true,
+      );
+      for (const table of Object.keys(before))
+        assert.equal(
+          await scalar("select count(*)::int from " + table),
+          before[table],
+        );
+    },
+  );
   await db.close();
 });

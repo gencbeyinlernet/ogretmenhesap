@@ -14,6 +14,15 @@ Supabase adresi ve **anon** anahtarı `backend.js` içindedir. Anon anahtarı ta
 
 SQL yeniden çalıştırılabilir; kayıtları ve mevcut öğretmenin parolasını değiştirmez. Tek öğretmen kısıtı veritabanında uygulanır. Öğretmen hesabı yalnızca yönetici SQL'i ile oluşturulur. Supabase Auth parolaları hash olarak saklar. Başlangıç SQL'i tamamlanmadan kayıt/giriş çalışmaz.
 
+## Giriş/kayıt sorunu giderme
+
+- SQL Editor **Success** sonucu, kurulumun tamamlandığını gösterir. Öğretmen girişi SQL paneline yazılan parola ile yapılır; uygulama otomatik bir başlangıç parolası atamaz. Ana kurulum SQL'ini tekrar çalıştırmak mevcut parolayı değiştirmez.
+- Parola uyuşmuyorsa **SQL kurulumu → Yapılacak işlem → Giriş onarımı** seçin. Yeni öğretmen parolasını girip SQL'i kopyalayın ve SQL Editor'da çalıştırın. `supabase/repair-auth.sql` şablonu yalnızca mevcut `burakturgut` öğretmeninin parolasını değiştirir, mevcut uygulama öğrencilerinin e-posta onay durumunu düzeltir. Öğrenci parolaları, mesajlar, ödevler ve puanlar silinmez. Yeni kayıtlar için **Confirm email** ayrıca kapatılmalıdır.
+- Öğretmen hesabı **Giriş yap** sekmesini kullanır; **Öğrenci kaydı** sekmesinden oluşturulmaz. Onaysız öğrenci hesabı varsa silmek yerine onarım SQL'i ile onaylayıp mevcut kullanıcı adı/parola ile giriş yapılabilir.
+- HTTP **429** bir Supabase sınırıdır. Uygulama sunucunun `Retry-After` süresini (yoksa en az 60 saniyeyi) gösterir ve bekleme sırasında aynı kayıt/giriş isteğini yeniden yollamaz. `over_email_send_rate_limit` kodu e-posta gönderim sınırıdır; Confirm email ayarını kontrol edin. Uygulama Supabase'in sunucu sınırını kaldıramaz, bekleme sonunda sınır sürerse Authentication Logs/Rate Limits ayarlarını kontrol edin.
+- HTTP **400** tek başına neden belirtmez. `invalid_credentials`, `email_not_confirmed`, `weak_password`, kapalı sağlayıcı/kayıt ve veritabanı trigger hataları ayrı mesajlarla gösterilir. Supabase Response/Auth Logs hata kodunu kullanın; şifre veya access token paylaşmayın.
+- Canlı Supabase üzerinde SQL çalıştırma ve Auth ayarlarını değiştirme proje sahibi oturumu gerektirir. Public anon anahtarı bu yetkiyi sağlamaz. Yerel ve taklit API testleri canlı proje doğrulaması yerine geçmez.
+
 ## Özellikler ve gizlilik
 
 - Öğretmen: tüm kayıtlı öğrenciler, öğrenci profilleri, tüm uygulama etkinlikleri ve iki kişi arasındaki konuşmalar.

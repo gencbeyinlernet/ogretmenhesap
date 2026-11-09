@@ -24,7 +24,7 @@ jobs:
           mkdir _site
           cp index.html style.css app.js backend.js _site/
           mkdir _site/supabase
-          cp supabase/schema.sql _site/supabase/
+          cp supabase/*.sql _site/supabase/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

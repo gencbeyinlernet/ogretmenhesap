@@ -154,12 +154,32 @@ function shell() {
   $("#side-role").closest("a").href = me ? "#profile" : "#home";
   $(".sidebar-bottom").hidden = !!me;
 }
+let authTimer;
+function paintAuthButton() {
+  const btn = document.querySelector('#auth-form button[type="submit"]');
+  if (!btn) {
+    clearInterval(authTimer);
+    return;
+  }
+  const remaining = db.authWait(authMode);
+  btn.disabled = busy || remaining > 0;
+  btn.textContent = remaining
+    ? `${remaining} sn sonra tekrar deneyin`
+    : busy
+      ? "İşlem yapılıyor…"
+      : authMode === "login"
+        ? "Giriş yap →"
+        : "Öğrenci hesabı oluştur →";
+}
 function login() {
   shell();
   $("#navigation").innerHTML = "";
   $("#content").innerHTML =
     `<div class="auth-layout"><section class="auth-welcome"><p class="eyebrow">BİRLİKTE ÖĞRENİYORUZ</p><h1>Bir öğretmen.<br>Bir sınıf dolusu<br><span>yeni ihtimal.</span></h1><p>Ödevlerin, mesajların ve öğrenme yolculuğun<br>tek bir yerde.</p><div class="auth-illustration" aria-hidden="true">▥ <span>✳</span></div><p class="privacy">Öğrenciler: Bu sistemdeki mesajlarınızı (öğrenciler arası konuşmalar dahil), açtığınız oyun ve kaynakları öğretmeniniz görebilir. Diğer sitelerdeki tarayıcı geçmişiniz izlenmez.</p></section><section class="card auth-card"><p class="eyebrow">ÖĞRETMEN DEFTERİ</p><h2>${authMode === "login" ? "Yeniden hoş geldiniz." : "Öğrenme alanına katılın."}</h2><p class="subtitle">${authMode === "login" ? "Hesabınızla giriş yaparak devam edin." : "Kayıt için yalnızca kullanıcı adı ve şifre yeterli."}</p><div class="auth-tabs"><button data-action="auth-login" class="${authMode === "login" ? "selected" : ""}">Giriş yap</button><button data-action="auth-register" class="${authMode === "register" ? "selected" : ""}">Öğrenci kaydı</button></div><form id="auth-form"><div class="field"><label for="username">Kullanıcı adı</label><input id="username" name="username" autocomplete="username" required pattern="[a-zA-Z0-9_]{3,24}" minlength="3" maxlength="24" placeholder="kullanici_adiniz" autocapitalize="none" spellcheck="false"><small>3–24 karakter: harf (a–z), rakam veya alt çizgi.</small></div><div class="field"><label for="password">Şifre</label><input id="password" name="password" type="password" autocomplete="${authMode === "login" ? "current-password" : "new-password"}" required minlength="6" maxlength="128" placeholder="En az 6 karakter"></div><p class="auth-error" id="auth-error" role="alert"></p><button class="button" type="submit">${authMode === "login" ? "Giriş yap →" : "Öğrenci hesabı oluştur →"}</button></form><p class="notice">${authMode === "register" ? "Hesabınız öğrenci olarak açılır. Öğretmen yetkisi kayıt formundan alınamaz." : "İlk kurulum için sol menüdeki “SQL kurulumu” düğmesini kullanın."}</p></section></div>`;
   $("#breadcrumb").textContent = "Öğretmen ve öğrenci giriş alanı";
+  clearInterval(authTimer);
+  paintAuthButton();
+  authTimer = setInterval(paintAuthButton, 1000);
 }
 async function all(table, query = "") {
   let result = [],
@@ -659,19 +679,43 @@ async function refreshPage() {
   shell();
   render();
 }
-async function setup() {
-  const dlg = $("#setup-dialog");
-  dlg.innerHTML = `<div class="dialog-head"><h2>Supabase kurulumu</h2><button class="icon-button" data-action="close-sql" aria-label="SQL penceresini kapat">×</button></div><p class="subtitle">Proje: <strong>rfmelsdtasxoddtolqpb</strong></p><ol class="setup-steps"><li>Öğretmen başlangıç şifresini aşağıya girin. Bu alan yalnızca kopyalanan SQL'e eklenir; dosyalara kaydedilmez.</li><li>SQL'i kopyalayıp <a href="https://supabase.com/dashboard/project/rfmelsdtasxoddtolqpb/sql/new" target="_blank" rel="noopener noreferrer">Supabase SQL Editor</a> içinde çalıştırın.</li><li><strong>Authentication → Sign In / Providers → Email</strong> bölümünde e-posta ile girişi açık tutun, <strong>Confirm email</strong> seçeneğini kapatın. Kayıtta gerçek e-posta alınmaz.</li><li>Bu pencereyi kapatın, <strong>burakturgut</strong> kullanıcı adı ve belirlediğiniz şifreyle giriş yapın.</li></ol><div class="field"><label for="setup-password">Öğretmen başlangıç şifresi</label><input type="password" id="setup-password" minlength="6" maxlength="128" autocomplete="new-password" placeholder="İstediğiniz başlangıç şifresini girin"></div><p class="notice">Tekrar çalıştırmak mevcut verileri veya öğretmen parolasını değiştirmez. Öğretmen parolası SQL içinde şifrelenerek saklanır. SQL'i paylaşmayın.</p><label class="sr-only" for="setup-sql">Kurulum SQL kodu</label><textarea id="setup-sql" class="sql-code" readonly spellcheck="false">SQL yükleniyor…</textarea><div class="dialog-actions">${button("copy-sql", "SQL kodunu kopyala")}${button("close-sql", "Kapat", "", true)}</div><p id="setup-status" role="status"></p>`;
-  dlg.showModal();
+let setupRequest = 0;
+async function loadSetupSQL(mode) {
+  const request = ++setupRequest,
+    dlg = $("#setup-dialog");
+  delete dlg.dataset.template;
+  $("#setup-sql").value = "SQL yükleniyor…";
+  $("#setup-status").textContent = "";
+  document.querySelector('label[for="setup-password"]').textContent =
+    mode === "repair" ? "Yeni öğretmen şifresi" : "Öğretmen başlangıç şifresi";
   try {
-    const response = await fetch("./supabase/schema.sql");
+    const response = await fetch(
+      mode === "repair"
+        ? "./supabase/repair-auth.sql"
+        : "./supabase/schema.sql",
+    );
     if (!response.ok) throw Error("SQL dosyası yüklenemedi.");
     const sql = await response.text();
+    if (request !== setupRequest || !dlg.open) return;
     dlg.dataset.template = sql;
     $("#setup-sql").value = sql;
   } catch (err) {
-    $("#setup-status").textContent = errorText(err);
+    if (request === setupRequest && dlg.open)
+      $("#setup-status").textContent = errorText(err);
   }
+}
+async function setup() {
+  const dlg = $("#setup-dialog");
+  dlg.innerHTML = `<div class="dialog-head"><h2>Supabase kurulumu ve giriş onarımı</h2><button class="icon-button" data-action="close-sql" aria-label="SQL penceresini kapat">×</button></div><p class="subtitle">Proje: <strong>rfmelsdtasxoddtolqpb</strong></p>${select(
+    "setupMode",
+    "Yapılacak işlem",
+    [
+      ["install", "İlk kurulum (mevcut parolayı değiştirmez)"],
+      ["repair", "Giriş onarımı (öğretmen parolasını değiştirir)"],
+    ],
+  )}<ol class="setup-steps"><li>Kurulumda Success gördüyseniz ve öğretmen girişi başarısızsa <strong>Giriş onarımı</strong> seçin. Bu işlem öğrenci kayıtlarını, mesajları veya ödevleri silmez.</li><li>Aşağıya öğretmen şifresini yazın. Yalnızca kopyalanan SQL'e eklenir, dosyalara kaydedilmez.</li><li>SQL'i kopyalayıp <a href="https://supabase.com/dashboard/project/rfmelsdtasxoddtolqpb/sql/new" target="_blank" rel="noopener noreferrer">Supabase SQL Editor</a> içinde çalıştırın. Success sonucunu bekleyin.</li><li><strong>Authentication → Sign In / Providers → Email</strong>: Email sağlayıcısını ve yeni kayıtları açık tutun, <strong>Confirm email</strong> seçeneğini kapatın. Onarım SQL'i mevcut uygulama hesaplarını da onaylar.</li><li><strong>Giriş yap</strong> sekmesinde <strong>burakturgut</strong> ve belirlediğiniz şifreyi kullanın. Öğretmen hesabı için Öğrenci kaydı kullanmayın.</li></ol><div class="field"><label for="setup-password">Öğretmen başlangıç şifresi</label><input type="password" id="setup-password" minlength="6" maxlength="128" autocomplete="new-password" placeholder="Girişte kullanacağınız şifreyi yazın"></div><p class="notice">429, Supabase istek sınırıdır; uygulama bekleme süresini gösterir. Parola veya SQL'i paylaşmayın. Onarım SQL'i yalnızca SQL Editor yetkisi olan proje sahibi tarafından çalıştırılabilir.</p><label class="sr-only" for="setup-sql">Kurulum SQL kodu</label><textarea id="setup-sql" class="sql-code" readonly spellcheck="false"></textarea><div class="dialog-actions">${button("copy-sql", "SQL kodunu kopyala")}${button("close-sql", "Kapat", "", true)}</div><p id="setup-status" role="status"></p>`;
+  dlg.showModal();
+  await loadSetupSQL("install");
 }
 async function action(key, el) {
   if (key === "sql") return setup();
@@ -915,7 +959,7 @@ async function submit(form) {
       const result = await db.signUp(username, password);
       if (!result.access_token)
         throw Error(
-          "Hesap için oturum açılamadı. Supabase Email sağlayıcısında Confirm email seçeneğini kapatın. Önceki onaysız hesabı Authentication → Users bölümünden kaldırıp yeniden kaydolun.",
+          "Hesap için oturum açılamadı. Supabase Email ayarlarında Confirm email seçeneğini kapatın. Sonra SQL kurulumu → Giriş onarımı SQL’ini çalıştırıp mevcut kullanıcı adı ve şifrenizle Giriş yap seçeneğini kullanın. Hesabınızı silmeyin.",
         );
     }
     await init();
@@ -1015,7 +1059,8 @@ document.addEventListener("submit", async (event) => {
     else fail(err);
   } finally {
     busy = false;
-    if (btn) btn.disabled = false;
+    if (form.id === "auth-form") paintAuthButton();
+    else if (btn) btn.disabled = false;
   }
 });
 document.addEventListener("input", (event) => {
@@ -1034,6 +1079,7 @@ document.addEventListener("input", (event) => {
 });
 document.addEventListener("change", (event) => {
   const el = event.target;
+  if (el.id === "f-setupMode") loadSetupSQL(el.value);
   if (el.id === "select-all-students")
     document
       .querySelectorAll('input[name="students"]')
@@ -1054,6 +1100,7 @@ document.addEventListener("change", (event) => {
 $("#close-modal").onclick = $("#cancel-modal").onclick = () =>
   $("#modal").close();
 $("#setup-dialog").addEventListener("close", () => {
+  ++setupRequest;
   $("#setup-dialog").innerHTML = "";
   delete $("#setup-dialog").dataset.template;
 });

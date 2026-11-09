@@ -229,6 +229,26 @@ async function mock(route) {
     await page.evaluate(() => navigator.clipboard.readText()),
     /test''quote/,
   );
+  await page.getByLabel("Yapılacak işlem").selectOption("repair");
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector("#setup-dialog")
+        .dataset.template?.includes("Giriş onarımı") ||
+      document
+        .querySelector("#setup-dialog")
+        .dataset.template?.includes("Mevcut kurulumda"),
+  );
+  await page.getByLabel("Yeni öğretmen şifresi").fill("repair-test-password");
+  await page.getByRole("button", { name: "SQL kodunu kopyala" }).click();
+  assert.match(
+    await page.evaluate(() => navigator.clipboard.readText()),
+    /repair-test-password/,
+  );
+  assert.match(
+    await page.locator("#setup-sql").inputValue(),
+    /update auth.users/,
+  );
   await page.getByRole("button", { name: "Kapat", exact: true }).click();
   assert.equal(await page.locator("#setup-password").count(), 0);
   await page.getByLabel("Kullanıcı adı", { exact: true }).fill("burakturgut");
@@ -383,9 +403,64 @@ async function mock(route) {
   await page.getByText("İkinci soruyu düzelt.", { exact: true }).waitFor();
   assert.equal(store.od_submissions[0].status, "returned");
   assert.deepEqual(errors, []);
+  const rateContext = await browser.newContext();
+  let signupAttempts = 0;
+  await rateContext.route(
+    "https://rfmelsdtasxoddtolqpb.supabase.co/auth/v1/signup",
+    (r) => {
+      signupAttempts++;
+      return r.fulfill({
+        status: 429,
+        contentType: "application/json",
+        headers: { "Retry-After": "120" },
+        body: JSON.stringify({
+          error_code: "over_email_send_rate_limit",
+          msg: "email rate limit exceeded",
+        }),
+      });
+    },
+  );
+  const ratePage = await rateContext.newPage();
+  await ratePage.goto("http://127.0.0.1:8000");
+  await ratePage
+    .getByRole("button", { name: "Öğrenci kaydı", exact: true })
+    .click();
+  await ratePage.getByLabel("Kullanıcı adı", { exact: true }).fill("deniz");
+  await ratePage.getByLabel("Şifre", { exact: true }).fill("test-password");
+  await ratePage
+    .getByRole("button", { name: "Öğrenci hesabı oluştur →" })
+    .click();
+  await ratePage
+    .locator("#auth-error")
+    .filter({ hasText: "Confirm email" })
+    .waitFor();
+  assert.equal(
+    await ratePage.locator('#auth-form button[type="submit"]').isDisabled(),
+    true,
+  );
+  assert.match(
+    await ratePage.locator('#auth-form button[type="submit"]').innerText(),
+    /sn sonra/,
+  );
+  await ratePage
+    .getByRole("button", { name: "Giriş yap", exact: true })
+    .click();
+  assert.equal(
+    await ratePage.locator('#auth-form button[type="submit"]').isDisabled(),
+    false,
+  );
+  await ratePage
+    .getByRole("button", { name: "Öğrenci kaydı", exact: true })
+    .click();
+  assert.equal(
+    await ratePage.locator('#auth-form button[type="submit"]').isDisabled(),
+    true,
+  );
+  assert.equal(signupAttempts, 1);
+  await rateContext.close();
   await browser.close();
   console.log(
-    "PASS: SQL copy/clear, teacher login, selected assignments, annual plans, student search/points, messaging/monitoring, username-only registration, student submissions/game/activity, XSS escaping, responsive widths, teacher returns assignment. Apps menu, direct online popup, shared Drive link and student opening log also verified. Live Supabase is not exercised by this mock test.",
+    "PASS: SQL copy/clear, teacher login, selected assignments, annual plans, student search/points, messaging/monitoring, username-only registration, student submissions/game/activity, XSS escaping, responsive widths, teacher returns assignment. Apps menu, direct online popup, shared Drive link and student opening log also verified. Auth repair SQL selection and 429 signup countdown/tab persistence verified. Live Supabase is not exercised by this mock test.",
   );
 })().catch((err) => {
   console.error(err);
